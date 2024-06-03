@@ -193,14 +193,19 @@ found:
 static void
 freeproc(struct proc *p)
 {
+  if (p->thread_id == 0) { // Lab part 3 change
+    if(p->pagetable)
+      proc_freepagetable(p->pagetable, p->sz);
+    p->pagetable = 0;
+  }
+
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
-  if(p->pagetable)
-    proc_freepagetable(p->pagetable, p->sz);
-  p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
+  p->thread_id = 0; // Lab part 3 change
+  p->child_count = 0; // Lab part 3 change
   p->parent = 0;
   p->name[0] = 0;
   p->chan = 0;
@@ -364,12 +369,18 @@ fork(void)
 }
 
 // Lab part 3
+// return -1 on failure for some reason
 int
-clone(void)
+clone(void *stack)
 {
   int i, pid;
   struct proc *np;
   struct proc *p = myproc();
+
+  // check stack is not null before proceeding
+  if (!stack) {
+    return -1;
+  }
 
   // Allocate process.
   if((np = allocproc_thread()) == 0){
@@ -381,7 +392,13 @@ clone(void)
   
   np->pagetable = p->pagetable; // lab part 3 point child pt to parent pt
   np->sz = p->sz;
-  np->trapframe->sp = p->trapframe->sp - (np->thread_id * PGSIZE);
+  np->trapframe->sp = (uint64)stack; // come back to this LAB PART 3
+
+  // mapping thread's trapframe
+  if(mappages(p->pagetable, TRAPFRAME - (np->thread_id * PGSIZE), PGSIZE,
+              (uint64)(np->trapframe), PTE_R | PTE_W) < 0){
+    return -1;
+  }
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
