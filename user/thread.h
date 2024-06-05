@@ -1,5 +1,6 @@
+
 struct lock_t {
-    unsigned int locked;
+    uint locked;
 };
 
 int thread_create(void *(start_routine)(void*), void *arg); 
