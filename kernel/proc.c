@@ -193,15 +193,13 @@ found:
 static void
 freeproc(struct proc *p)
 {
- 
-  if (p->pagetable){ 
-    if(p->thread_id) {
+  if (p->pagetable) {
+    if (p->thread_id == 0) {
+      proc_freepagetable(p->pagetable, p->sz);
+      p->pagetable = 0;
+    } else {
       uvmunmap(p->pagetable, TRAPFRAME - PGSIZE*(p->thread_id), 1, 0);
     }
-  }
-  else if(p->pagetable){
-      proc_freepagetable(p->pagetable, p->sz);
-    
   }
 
 
