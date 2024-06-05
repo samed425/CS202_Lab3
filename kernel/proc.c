@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "defs.h"
 
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -14,10 +15,8 @@ struct proc *initproc;
 
 int nextpid = 1;
 struct spinlock pid_lock;
-
 extern void forkret(void);
 static void freeproc(struct proc *p);
-
 extern char trampoline[]; // trampoline.S
 
 // helps ensure that wakeups of wait()ing
@@ -123,7 +122,7 @@ allocproc(void)
 
 found:
   p->pid = allocpid();
-  p->thread_id = 0; // Lab part 3
+  p->thread_id = 0; // Lab part 3, for the parent
   p->child_count = 0; // Lab part 3
   p->state = USED;
 
@@ -190,17 +189,26 @@ found:
 // free a proc structure and the data hanging from it,
 // including user pages.
 // p->lock must be held.
+//made changes to the freeproc for lab3.
 static void
 freeproc(struct proc *p)
 {
-  if (p->thread_id == 0) { // Lab part 3 change
-    if(p->pagetable)
-      proc_freepagetable(p->pagetable, p->sz);
-    p->pagetable = 0;
+ 
+  if (p->pagetable){ 
+    if(p->thread_id) {
+      uvmunmap(p->pagetable, TRAPFRAME - PGSIZE*(p->thread_id), 1, 0);
+    }
   }
+  else if(p->pagetable){
+      proc_freepagetable(p->pagetable, p->sz);
+    
+  }
+
 
   if(p->trapframe)
     kfree((void*)p->trapframe);
+
+  p->pagetable = 0;
   p->trapframe = 0;
   p->sz = 0;
   p->pid = 0;
@@ -376,9 +384,9 @@ clone(void *stack)
   int i, pid;
   struct proc *np;
   struct proc *p = myproc();
-
+  int pagesize_pointer = PGSIZE * sizeof(void); //page size stack pointer
   // check stack is not null before proceeding
-  if (!stack) {
+  if (stack == 0) {
     return -1;
   }
 
@@ -392,18 +400,19 @@ clone(void *stack)
   
   np->pagetable = p->pagetable; // lab part 3 point child pt to parent pt
   np->sz = p->sz;
-  np->trapframe->sp = (uint64)stack; // come back to this LAB PART 3
-
+  np->trapframe->sp = (uint64)(stack + pagesize_pointer); // come back to this LAB PART 3
+ 
   // mapping thread's trapframe
   if(mappages(p->pagetable, TRAPFRAME - (np->thread_id * PGSIZE), PGSIZE,
               (uint64)(np->trapframe), PTE_R | PTE_W) < 0){
+    printf("clone: mappages failed\n"); //testing!
     return -1;
   }
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
-  // Cause fork to return 0 in the child.
+  //set the return value for the child to 0
   np->trapframe->a0 = 0;
 
   // increment reference counts on open file descriptors.
@@ -413,15 +422,11 @@ clone(void *stack)
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
-
   pid = np->pid;
-
   release(&np->lock);
-
   acquire(&wait_lock);
   np->parent = p;
   release(&wait_lock);
-
   acquire(&np->lock);
   np->state = RUNNABLE;
   release(&np->lock);
@@ -456,14 +461,15 @@ exit(int status)
     panic("init exiting");
 
   // Close all open files.
-  for(int fd = 0; fd < NOFILE; fd++){
-    if(p->ofile[fd]){
-      struct file *f = p->ofile[fd];
-      fileclose(f);
-      p->ofile[fd] = 0;
+  if(p->thread_id == 0){ //lab3 - need to specify if it is a parent process or not.
+    for(int fd = 0; fd < NOFILE; fd++){
+      if(p->ofile[fd]){
+        struct file *f = p->ofile[fd];
+        fileclose(f);
+        p->ofile[fd] = 0;
+      }
     }
   }
-
   begin_op();
   iput(p->cwd);
   end_op();

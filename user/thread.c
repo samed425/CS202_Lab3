@@ -4,9 +4,12 @@
 #define PGSIZE 4096
 
 int thread_create(void *(start_routine)(void*), void *arg) {
-    void* stack = (void*) malloc(PGSIZE);
+    // stack pointer of page size bytes
+    int pagesize_pointer = PGSIZE*sizeof(void);
+
+    void* stack = (void*) malloc(pagesize_pointer);
     int pid = clone(stack);
-    if (pid != -1) {
+    if (pid == 0) {
         // call start routine
         (*start_routine)(arg);
         exit(0);
