@@ -127,12 +127,11 @@ usertrapret(void)
   // and switches to user mode with sret.
   if (p->thread_id == 0) {
     uint64 trampoline_userret = TRAMPOLINE + (userret - trampoline);
-  ((void (*)(uint64))trampoline_userret)(satp);
+    ((void (*)(uint64, uint64))trampoline_userret)(TRAPFRAME, satp);
   } else {
     uint64 trampoline_userret = TRAMPOLINE + (userret - trampoline);
-  ((void (*)(uint64,uint64))trampoline_userret)(TRAPFRAME - PGSIZE * p->thread_id, satp); // Lab part 3
+    ((void (*)(uint64,uint64))trampoline_userret)(TRAPFRAME - PGSIZE * p->thread_id, satp); // Lab part 3
   }
-  
 }
 
 // interrupts and exceptions from kernel code go here via kernelvec,
